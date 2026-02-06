@@ -1,0 +1,471 @@
+/* app.js — Supplier Tracker (split files, hard-coded config in HTML) */
+(function(){
+  const $ = (id)=>document.getElementById(id);
+  const authError = $('authError');
+  const showErr = (t)=>{ if(!authError) return; authError.textContent=t||''; authError.classList.remove('hidden'); };
+  const hideErr = ()=>{ if(!authError) return; authError.textContent=''; authError.classList.add('hidden'); };
+
+  if (!window.supabase){ showErr('Supabase JS not loaded.'); return; }
+  if (!window.__SUPABASE_URL__ || !window.__SUPABASE_ANON_KEY__){
+    showErr('Missing Supabase keys. Paste them in BOTH index.html + orderpage.html hard-coded config.');
+    return;
+  }
+
+  const supa = window.supabase.createClient(window.__SUPABASE_URL__, window.__SUPABASE_ANON_KEY__);
+  const BUCKET = window.__ATTACHMENTS_BUCKET__ || 'order_attachments';
+
+  const userChip = $('userChip');
+  const btnLogout = $('btnLogout');
+  const btnRefresh = $('btnRefresh');
+  const orderList = $('orderList');
+  const countLabel = $('countLabel');
+
+  const form = $('orderForm');
+  const formTitle = $('formTitle');
+  const formMsg = $('formMsg');
+  const btnClear = $('btnClear');
+  const btnSave = $('btnSave');
+
+  const inputCustomer = $('customer_name');
+  const inputFb = $('fb_profile');
+  const inputDetails = $('order_details');
+  const inputAttach = $('attachment');
+  const inputStatus = $('status');
+  const inputDate = $('order_date');
+  const inputDelivery = $('delivery_method');
+  const inputPaidProd = $('paid_product');
+  const inputPaidShip = $('paid_shipping');
+  const inputNotes = $('notes');
+
+  const search = $('search');
+  const statusFilter = $('statusFilter');
+  const dateFilter = $('dateFilter');
+  const tabs = document.querySelectorAll('#tabs .tab');
+
+  const adminDash = $('adminOnlyDashboard');
+  const kpiTotal = $('kpiTotal');
+  const kpiPaid = $('kpiPaid');
+  const kpiPending = $('kpiPending');
+
+  let orders = [];
+  let editingId = null;
+  let activeTab = 'all';
+
+  const money = (n)=>'₱'+Number(n||0).toLocaleString(undefined,{maximumFractionDigits:2});
+
+  async function ensureSession(){
+    hideErr();
+    const { data: { session }, error } = await supa.auth.getSession();
+    if (error){ showErr(error.message); return null; }
+    if (!session){ location.replace('./index.html'); return null; }
+
+    const email = session.user?.email || 'Logged in';
+    if (userChip) userChip.textContent = email;
+
+    const allow = Array.isArray(window.__ADMIN_EMAILS__) ? window.__ADMIN_EMAILS__ : [];
+    const isAdmin = allow.map(x=>String(x).toLowerCase()).includes(String(email).toLowerCase());
+    if (adminDash) adminDash.classList.toggle('hidden', !isAdmin);
+
+    return session;
+  }
+
+  async function logout(){
+    await supa.auth.signOut();
+    location.replace('./index.html');
+  }
+
+  function handleDeliveryChange(){
+    if (!inputDelivery || !inputPaidShip) return;
+    if (inputDelivery.value === 'walkin'){
+      inputPaidShip.value = '0';
+      inputPaidShip.disabled = true;
+    } else {
+      inputPaidShip.disabled = false;
+    }
+  }
+
+  function resetForm(){
+    editingId = null;
+    if (formTitle) formTitle.textContent = 'New Order';
+    form.reset();
+    if (inputStatus) inputStatus.value = 'pending';
+    if (inputDelivery) inputDelivery.value = 'jnt';
+    handleDeliveryChange();
+    if (formMsg) formMsg.textContent = '—';
+  }
+
+  async function uploadAttachment(file){
+    if (!file) return null;
+    const ext = (file.name.split('.').pop()||'jpg').toLowerCase().replace(/[^a-z0-9]/g,'');
+    const path = `orders/${Date.now()}_${Math.random().toString(16).slice(2)}.${ext}`;
+    const { error } = await supa.storage.from(BUCKET).upload(path, file, {
+      cacheControl:'3600',
+      upsert:false,
+      contentType:file.type||'image/jpeg'
+    });
+    if (error) throw error;
+
+    const { data } = supa.storage.from(BUCKET).getPublicUrl(path);
+    return data?.publicUrl || path;
+  }
+
+  async function loadOrders(){
+    if (!await ensureSession()) return;
+
+    const { data, error } = await supa
+      .from('orders')
+      .select('*')
+      .order('last_updated', { ascending:false });
+
+    if (error){
+      showErr('Failed to load orders: ' + (error.message||error));
+      return;
+    }
+
+    orders = Array.isArray(data) ? data : [];
+    rebuildDateOptions();
+    render();
+  }
+
+  function rebuildDateOptions(){
+    if (!dateFilter) return;
+    const current = dateFilter.value || 'all';
+    const set = new Set();
+    for (const o of orders){ if (o.order_date) set.add(o.order_date); }
+    const sorted = Array.from(set).sort((a,b)=>String(b).localeCompare(String(a)));
+    dateFilter.innerHTML =
+      '<option value="all">All Dates</option>' +
+      sorted.map(d=>`<option value="${d}">${d}</option>`).join('');
+    dateFilter.value = sorted.includes(current) ? current : 'all';
+  }
+
+  function filtered(){
+    const q = (search?.value||'').trim().toLowerCase();
+    const st = statusFilter?.value || 'all';
+    const dt = dateFilter?.value || 'all';
+
+    return orders.filter(o=>{
+      if (activeTab !== 'all' && String(o.delivery_method||'').toLowerCase() !== activeTab) return false;
+      if (st !== 'all' && String(o.status||'').toLowerCase() !== st) return false;
+      if (dt !== 'all' && String(o.order_date||'') !== dt) return false;
+      if (!q) return true;
+      const hay = [o.order_id,o.customer_name,o.fb_profile,o.order_details,o.notes]
+        .filter(Boolean).join(' ').toLowerCase();
+      return hay.includes(q);
+    });
+  }
+
+  
+  function renderKPIs(){
+    // KPI elements
+    const el = (id)=>document.getElementById(id);
+
+    if (el('kpiTotal')) el('kpiTotal').textContent = String(orders.length);
+
+    const product = orders.reduce((a,o)=>a+Number(o.paid_product||0),0);
+    const ship = orders.reduce((a,o)=>a+Number(o.paid_shipping||0),0);
+    const total = product + ship;
+
+    if (el('kpiProductRev')) el('kpiProductRev').textContent = money(product);
+    if (el('kpiShipRev')) el('kpiShipRev').textContent = money(ship);
+    if (el('kpiTotalRev')) el('kpiTotalRev').textContent = money(total);
+
+    // Today metrics (based on order_date = YYYY-MM-DD)
+    const d = new Date();
+    const today = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const todayOrders = orders.filter(o=>String(o.order_date||'')===today);
+
+    const uniq = new Set(todayOrders.map(o=>String(o.customer_name||'').trim().toLowerCase()).filter(Boolean));
+    const todayTotal = todayOrders.reduce((a,o)=>a+Number(o.paid_product||0)+Number(o.paid_shipping||0),0);
+
+    if (el('kpiOrdersToday')) el('kpiOrdersToday').textContent = String(todayOrders.length);
+    if (el('kpiCustomersToday')) el('kpiCustomersToday').textContent = String(uniq.size);
+    if (el('kpiRevenueToday')) el('kpiRevenueToday').textContent = money(todayTotal);
+
+    // Status counts
+    const counts = orders.reduce((acc,o)=>{
+      const s = String(o.status||'pending').toLowerCase();
+      acc[s] = (acc[s]||0)+1;
+      return acc;
+    },{});
+    const set = (id,val)=>{ const x=el(id); if(x) x.textContent = String(val||0); };
+    set('stPending', counts.pending);
+    set('stProcessing', counts.processing);
+    set('stShipped', counts.shipped);
+    set('stDelivered', counts.delivered);
+    set('stCancelled', counts.cancelled || counts.cancel || counts.canceled);
+
+    // Sales by day table
+    const daysSelect = el('daysSelect');
+    const daysLabel = el('daysLabel');
+    const body = el('salesTableBody');
+    if (!daysSelect || !daysLabel || !body) return;
+
+    const days = Number(daysSelect.value || 7);
+    daysLabel.textContent = String(days);
+
+    const byDate = new Map();
+    for (const o of orders){
+      const key = o.order_date;
+      if (!key) continue;
+      if (!byDate.has(key)){
+        byDate.set(key, { orders:0, customers:new Set(), prod:0, ship:0 });
+      }
+      const row = byDate.get(key);
+      row.orders += 1;
+      row.customers.add(String(o.customer_name||'').trim().toLowerCase());
+      row.prod += Number(o.paid_product||0);
+      row.ship += Number(o.paid_shipping||0);
+    }
+
+    const rows = [];
+    const now = new Date();
+    for (let i=0; i<days; i++){
+      const dd = new Date(now);
+      dd.setDate(now.getDate()-i);
+      const key = `${dd.getFullYear()}-${String(dd.getMonth()+1).padStart(2,'0')}-${String(dd.getDate()).padStart(2,'0')}`;
+      const rec = byDate.get(key) || { orders:0, customers:new Set(), prod:0, ship:0 };
+      rows.push({
+        date:key,
+        orders:rec.orders,
+        customers:rec.customers.size,
+        prod:rec.prod,
+        ship:rec.ship,
+        total:rec.prod+rec.ship
+      });
+    }
+
+    body.innerHTML = rows.map(r=>`
+      <tr>
+        <td style="padding:10px;border-bottom:1px solid rgba(35,48,85,.35)">${r.date}</td>
+        <td style="padding:10px;text-align:right;border-bottom:1px solid rgba(35,48,85,.35)">${r.orders}</td>
+        <td style="padding:10px;text-align:right;border-bottom:1px solid rgba(35,48,85,.35)">${r.customers}</td>
+        <td style="padding:10px;text-align:right;border-bottom:1px solid rgba(35,48,85,.35)">${money(r.prod)}</td>
+        <td style="padding:10px;text-align:right;border-bottom:1px solid rgba(35,48,85,.35)">${money(r.ship)}</td>
+        <td style="padding:10px;text-align:right;border-bottom:1px solid rgba(35,48,85,.35)">${money(r.total)}</td>
+      </tr>
+    `).join('');
+  }
+
+  function render(){
+    const list = filtered();
+    if (countLabel) countLabel.textContent = `${list.length} order${list.length===1?'':'s'}`;
+    renderKPIs();
+
+    if (!orderList) return;
+    orderList.innerHTML = '';
+
+    for (const o of list){
+      const li = document.createElement('li');
+      li.className = 'item';
+
+      const left = document.createElement('div');
+      const title = document.createElement('div');
+      title.className='titleLine';
+
+      const name = document.createElement('div');
+      name.style.fontWeight='800';
+      name.textContent = o.customer_name || '(No name)';
+
+      const pill = (t, extra)=>{
+        const s=document.createElement('span');
+        s.className='pill '+(extra||'');
+        s.textContent=t; return s;
+      };
+
+      title.appendChild(name);
+      title.appendChild(pill(String(o.status||'pending').toUpperCase()));
+      title.appendChild(pill('🚚 '+String(o.delivery_method||'jnt').toUpperCase()));
+      if (o.order_id) title.appendChild(pill(o.order_id,'accent'));
+
+      const sub = document.createElement('div');
+      sub.style.marginTop='6px';
+      sub.style.color='var(--muted)';
+      sub.style.fontSize='12px';
+      sub.textContent = [
+        o.order_date?('📅 '+o.order_date):'',
+        '💰 '+money(Number(o.paid_product||0)+Number(o.paid_shipping||0)),
+        ''
+      ].filter(Boolean).join(' • ');
+
+      left.appendChild(title);
+      left.appendChild(sub);
+
+      
+
+      // ===== Expandable Order Details =====
+      const raw = (o.order_details || '').trim();
+
+      const preview = document.createElement('div');
+      preview.className = 'details-preview';
+      preview.textContent = raw ? '🧾 Order form hidden — click Expand to view.' : '';
+
+      const full = document.createElement('div');
+      full.className = 'details-full';
+      const pre = document.createElement('pre');
+      pre.textContent = raw;
+      full.appendChild(pre);
+
+      if (raw){
+        left.appendChild(preview);
+        left.appendChild(full);
+      }
+
+const right = document.createElement('div');
+      right.style.display='flex';
+      right.style.gap='8px';
+      right.style.flexWrap='wrap';
+      right.style.justifyContent='flex-end';
+
+      
+
+      // Expand / Collapse button (shows full order form)
+      if ((o.order_details || '').trim()){
+        const toggle = document.createElement('button');
+        toggle.className = 'btn small';
+        toggle.type = 'button';
+        toggle.textContent = 'Expand';
+        toggle.onclick = ()=>{
+          const open = !full.classList.contains('show');
+          full.classList.toggle('show', open);
+          toggle.textContent = open ? 'Collapse' : 'Expand';
+          if (open) full.scrollIntoView({ block:'nearest', behavior:'smooth' });
+        };
+        right.appendChild(toggle);
+      }
+
+if (o.attachment_url){
+        const a=document.createElement('a');
+        a.className='btn';
+        a.href=o.attachment_url;
+        a.target='_blank';
+        a.rel='noopener';
+        a.textContent='View';
+        right.appendChild(a);
+      }
+
+      const edit=document.createElement('button');
+      edit.className='btn';
+      edit.type='button';
+      edit.textContent='Edit';
+      edit.onclick=()=>startEdit(o);
+      right.appendChild(edit);
+
+      const del=document.createElement('button');
+      del.className='btn danger';
+      del.type='button';
+      del.textContent='Delete';
+      del.onclick=()=>deleteOrder(o);
+      right.appendChild(del);
+
+      li.appendChild(left);
+      li.appendChild(right);
+      orderList.appendChild(li);
+    }
+  }
+
+  function startEdit(o){
+    editingId = o.id;
+    if (formTitle) formTitle.textContent = `Edit Order (${o.order_id || o.id})`;
+    inputCustomer.value = o.customer_name || '';
+    inputFb.value = o.fb_profile || '';
+    inputDetails.value = o.order_details || '';
+    inputStatus.value = o.status || 'pending';
+    inputDate.value = o.order_date || '';
+    inputDelivery.value = (o.delivery_method || 'jnt');
+    inputPaidProd.value = String(o.paid_product ?? '');
+    inputPaidShip.value = String(o.paid_shipping ?? '');
+    inputNotes.value = o.notes || '';
+    handleDeliveryChange();
+  }
+
+  async function deleteOrder(o){
+    if (!confirm(`Delete order ${o.order_id || o.id}?`)) return;
+    const { error } = await supa.from('orders').delete().eq('id', o.id);
+    if (error){ alert(error.message || 'Delete failed'); return; }
+    await loadOrders();
+    resetForm();
+  }
+
+  async function saveOrder(ev){
+    ev.preventDefault();
+    if (formMsg) formMsg.textContent = 'Saving…';
+    btnSave.disabled = true;
+
+    try{
+      if (!await ensureSession()) return;
+
+      const payload = {
+        customer_name: inputCustomer.value.trim(),
+        fb_profile: inputFb.value.trim() || null,
+        order_details: inputDetails.value.trim(),
+        paid_product: Number(inputPaidProd.value || 0),
+        paid_shipping: Number(inputPaidShip.value || 0),
+        status: inputStatus.value,
+        order_date: inputDate.value || null,
+        notes: inputNotes.value.trim() || null,
+        delivery_method: inputDelivery.value
+      };
+
+      if (payload.delivery_method === 'walkin') payload.paid_shipping = 0;
+
+      const file = inputAttach?.files?.[0] || null;
+      if (file){ payload.attachment_url = await uploadAttachment(file); }
+
+      let error;
+      if (editingId){
+        ({ error } = await supa.from('orders').update(payload).eq('id', editingId));
+      } else {
+        ({ error } = await supa.from('orders').insert(payload));
+      }
+
+      if (error) throw error;
+
+      if (formMsg) formMsg.textContent = 'Saved ✅';
+      await loadOrders();
+      resetForm();
+    } catch(e){
+      showErr(e?.message || String(e));
+      if (formMsg) formMsg.textContent = 'Save failed';
+    } finally {
+      btnSave.disabled = false;
+      if (inputAttach) inputAttach.value = '';
+    }
+  }
+
+  function setActiveTab(val){
+    activeTab = val;
+    tabs.forEach(t=>t.classList.toggle('active', t.dataset.tab === val));
+    render();
+  }
+
+  async function init(){
+    if (!await ensureSession()) return;
+
+    if (btnLogout) btnLogout.addEventListener('click', logout);
+    if (btnRefresh) btnRefresh.addEventListener('click', loadOrders);
+    if (btnClear) btnClear.addEventListener('click', resetForm);
+    if (form) form.addEventListener('submit', saveOrder);
+
+    if (inputDelivery) inputDelivery.addEventListener('change', handleDeliveryChange);
+    handleDeliveryChange();
+
+    if (search) search.addEventListener('input', render);
+    if (statusFilter) statusFilter.addEventListener('change', render);
+    if (dateFilter) dateFilter.addEventListener('change', render);
+
+    
+    const daysSelect = document.getElementById('daysSelect');
+    if (daysSelect) daysSelect.addEventListener('change', render);
+tabs.forEach(t=>t.addEventListener('click', ()=>setActiveTab(t.dataset.tab)));
+
+    supa.auth.onAuthStateChange((event)=>{
+      if (event==='SIGNED_OUT') location.replace('./index.html');
+    });
+
+    await loadOrders();
+    resetForm();
+  }
+
+  init();
+})();
