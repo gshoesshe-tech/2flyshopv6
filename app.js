@@ -94,7 +94,25 @@
     }
   }
 
-  async function ensureSession(){
+  
+  function normalizeFbUrl(v){
+    const s = String(v||'').trim();
+    if (!s) return '';
+    // Already a full URL
+    if (/^https?:\/\//i.test(s)) return s;
+    // Starts with www.
+    if (/^www\./i.test(s)) return 'https://' + s;
+    // Looks like fb:// deep link - leave as is
+    if (/^fb:\/\//i.test(s)) return s;
+    // Username like @name
+    if (s.startsWith('@')) return 'https://www.facebook.com/' + s.slice(1);
+    // If it already contains facebook.com but no scheme
+    if (/facebook\.com/i.test(s)) return 'https://' + s.replace(/^\/\/+/, '');
+    // Otherwise treat as username/path
+    return 'https://www.facebook.com/' + encodeURIComponent(s);
+  }
+
+async function ensureSession(){
     hideErr();
     const { data: { session }, error } = await supa.auth.getSession();
     if (error){ showErr(error.message); return null; }
@@ -401,7 +419,19 @@ const right = document.createElement('div');
 
       // Expand / Collapse button (shows full order form)
 
-      // Copy Order Details (always copies raw order_details)
+      
+      // Facebook Profile button (opens fb_profile)
+      if ((o.fb_profile || '').trim()){
+        const fb = document.createElement('a');
+        fb.className = 'btn small';
+        fb.href = normalizeFbUrl(o.fb_profile);
+        fb.target = '_blank';
+        fb.rel = 'noopener';
+        fb.textContent = 'FB Profile';
+        right.appendChild(fb);
+      }
+
+// Copy Order Details (always copies raw order_details)
       if ((o.order_details || '').trim()){
         const copyBtn = document.createElement('button');
         copyBtn.className = 'btn small';
