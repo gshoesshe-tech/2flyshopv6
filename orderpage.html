@@ -19,7 +19,7 @@
   <script defer src="./app.js"></script>
 
   <style>
-    :root{--bg:#070b15;--text:#e8ecff;--muted:#9aa6cf;--accent:#7c5cff;--danger:#ff6b6b;--shadow:0 18px 60px rgba(0,0,0,.55);--radius:16px}
+    :root{--bg:#070b15;--text:#e8ecff;--muted:#9aa6cf;--accent:#7c5cff;--danger:#ff6b6b;--shadow:0 18px 60px rgba(0,0,0,.55);--radius:16px;--ok:#33d69f}
     *{box-sizing:border-box}
     body{margin:0;background:radial-gradient(1200px 500px at 55% 0%, rgba(124,92,255,.18), transparent 62%),radial-gradient(900px 500px at 10% 10%, rgba(51,214,159,.10), transparent 60%),var(--bg);color:var(--text);font:14px/1.4 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial}
     header{position:sticky;top:0;z-index:20;backdrop-filter:blur(8px);background:rgba(7,11,21,.55);border-bottom:1px solid rgba(35,48,85,.65)}
@@ -92,6 +92,30 @@
       color:var(--text);
     }
     .btn.small{padding:7px 10px;font-size:12px;border-radius:10px;font-weight:700}
+
+  
+    /* ===== Premium UI Add-ons ===== */
+    #kpiProductRev{color:var(--ok)}
+    .kpiTools{display:flex;justify-content:flex-end;gap:10px;align-items:center;margin:10px 0 0}
+    .kpiTools .btn{padding:8px 10px;border-radius:10px;font-size:12px;font-weight:750}
+    .toast{
+      position:fixed;left:50%;top:18px;transform:translateX(-50%);
+      background:rgba(13,22,48,.92);border:1px solid rgba(35,48,85,.85);
+      color:var(--text);padding:10px 12px;border-radius:12px;box-shadow:0 18px 60px rgba(0,0,0,.55);
+      font-size:12px;font-weight:750;z-index:9999;opacity:0;pointer-events:none;
+      transition:opacity .18s ease, transform .18s ease;
+    }
+    .toast.show{opacity:1;transform:translateX(-50%) translateY(4px)}
+    .notes-box{
+      margin-top:10px;padding:10px 12px;border-radius:12px;
+      border:1px solid rgba(35,48,85,.45);background:rgba(7,11,21,.22)
+    }
+    .notes-hd{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:6px}
+    .notes-lbl{font-size:11px;color:var(--muted);font-weight:800;letter-spacing:.3px;text-transform:uppercase}
+    .notes-txt{font-size:12px;line-height:1.55;color:var(--text);white-space:pre-wrap;word-break:break-word}
+    .notes-txt.clamp{
+      display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden
+    }
 
   </style>
 </head>
@@ -216,6 +240,9 @@
 
             
 <div id="adminOnlyDashboard" class="hidden" style="margin-top:12px">
+  <div class="kpiTools">
+    <button id="btnToggleShipping" class="btn" type="button">Show Shipping</button>
+  </div>
   <!-- KPI ROW 1 -->
   <div class="kpi" style="grid-template-columns:repeat(4,1fr)">
     <div class="box"><div class="num" id="kpiTotal">0</div><div class="lbl">TOTAL ORDERS</div></div>

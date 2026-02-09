@@ -53,6 +53,47 @@
 
   const money = (n)=>'₱'+Number(n||0).toLocaleString(undefined,{maximumFractionDigits:2});
 
+  // ===== UI State (display-only) =====
+  let shippingHidden = true; // hide shipping numbers by default
+  let toastTimer = null;
+
+  function showToast(msg){
+    let el = document.getElementById('toast');
+    if (!el){
+      el = document.createElement('div');
+      el.id = 'toast';
+      el.className = 'toast';
+      document.body.appendChild(el);
+    }
+    el.textContent = msg;
+    el.classList.add('show');
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(()=>{ el.classList.remove('show'); }, 1200);
+  }
+
+  async function copyToClipboard(text){
+    const t = String(text||'');
+    if (!t){ showToast('Nothing to copy'); return; }
+    try{
+      if (navigator.clipboard && window.isSecureContext){
+        await navigator.clipboard.writeText(t);
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = t;
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        ta.style.top = '-9999px';
+        document.body.appendChild(ta);
+        ta.focus(); ta.select();
+        document.execCommand('copy');
+        ta.remove();
+      }
+      showToast('Copied ✅');
+    } catch(e){
+      showToast('Copy failed');
+    }
+  }
+
   async function ensureSession(){
     hideErr();
     const { data: { session }, error } = await supa.auth.getSession();
@@ -115,7 +156,8 @@
     const { data, error } = await supa
       .from('orders')
       .select('*')
-      .order('last_updated', { ascending:false });
+      .order('order_date', { ascending:false })
+      .order('id', { ascending:false });
 
     if (error){
       showErr('Failed to load orders: ' + (error.message||error));
@@ -167,7 +209,7 @@
     const total = product + ship;
 
     if (el('kpiProductRev')) el('kpiProductRev').textContent = money(product);
-    if (el('kpiShipRev')) el('kpiShipRev').textContent = money(ship);
+    if (el('kpiShipRev')) el('kpiShipRev').textContent = shippingHidden ? 'Hidden' : money(ship);
     if (el('kpiTotalRev')) el('kpiTotalRev').textContent = money(total);
 
     // Today metrics (based on order_date = YYYY-MM-DD)
@@ -241,7 +283,7 @@
         <td style="padding:10px;text-align:right;border-bottom:1px solid rgba(35,48,85,.35)">${r.orders}</td>
         <td style="padding:10px;text-align:right;border-bottom:1px solid rgba(35,48,85,.35)">${r.customers}</td>
         <td style="padding:10px;text-align:right;border-bottom:1px solid rgba(35,48,85,.35)">${money(r.prod)}</td>
-        <td style="padding:10px;text-align:right;border-bottom:1px solid rgba(35,48,85,.35)">${money(r.ship)}</td>
+        <td style="padding:10px;text-align:right;border-bottom:1px solid rgba(35,48,85,.35)">${shippingHidden ? 'Hidden' : money(r.ship)}</td>
         <td style="padding:10px;text-align:right;border-bottom:1px solid rgba(35,48,85,.35)">${money(r.total)}</td>
       </tr>
     `).join('');
@@ -311,6 +353,44 @@
         left.appendChild(full);
       }
 
+      // ===== Private Notes (preview + toggle) =====
+      const notesRaw = (o.notes || '').trim();
+      if (notesRaw){
+        const nb = document.createElement('div');
+        nb.className = 'notes-box';
+
+        const nh = document.createElement('div');
+        nh.className = 'notes-hd';
+
+        const nl = document.createElement('div');
+        nl.className = 'notes-lbl';
+        nl.textContent = 'Private Notes';
+
+        const nbtn = document.createElement('button');
+        nbtn.className = 'btn small';
+        nbtn.type = 'button';
+        nbtn.textContent = 'Show notes';
+
+        nh.appendChild(nl);
+        nh.appendChild(nbtn);
+
+        const nt = document.createElement('div');
+        nt.className = 'notes-txt clamp';
+        nt.textContent = notesRaw;
+
+        let openNotes = false;
+        nbtn.onclick = ()=>{
+          openNotes = !openNotes;
+          nt.classList.toggle('clamp', !openNotes);
+          nbtn.textContent = openNotes ? 'Hide notes' : 'Show notes';
+        };
+
+        nb.appendChild(nh);
+        nb.appendChild(nt);
+        left.appendChild(nb);
+      }
+
+
 const right = document.createElement('div');
       right.style.display='flex';
       right.style.gap='8px';
@@ -320,6 +400,17 @@ const right = document.createElement('div');
       
 
       // Expand / Collapse button (shows full order form)
+
+      // Copy Order Details (always copies raw order_details)
+      if ((o.order_details || '').trim()){
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'btn small';
+        copyBtn.type = 'button';
+        copyBtn.textContent = 'Copy Order Details';
+        copyBtn.onclick = ()=>copyToClipboard(raw);
+        right.appendChild(copyBtn);
+      }
+
       if ((o.order_details || '').trim()){
         const toggle = document.createElement('button');
         toggle.className = 'btn small';
@@ -457,6 +548,25 @@ if (o.attachment_url){
     
     const daysSelect = document.getElementById('daysSelect');
     if (daysSelect) daysSelect.addEventListener('change', render);
+
+    // Hide shipping numbers by default (dashboard + sales table). Toggle via button.
+    const btnToggleShipping = document.getElementById('btnToggleShipping');
+    if (btnToggleShipping){
+      const sync = ()=>{ btnToggleShipping.textContent = shippingHidden ? 'Show Shipping' : 'Hide Shipping'; };
+      sync();
+      btnToggleShipping.addEventListener('click', ()=>{
+        if (shippingHidden){
+          const ok = confirm('Reveal shipping numbers? This will show shipping collected on screen.');
+          if (!ok) return;
+          shippingHidden = false;
+        } else {
+          shippingHidden = true;
+        }
+        sync();
+        render();
+      });
+    }
+
 tabs.forEach(t=>t.addEventListener('click', ()=>setActiveTab(t.dataset.tab)));
 
     supa.auth.onAuthStateChange((event)=>{
