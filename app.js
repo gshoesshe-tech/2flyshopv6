@@ -1,3 +1,4 @@
+
 /* app.js — Supplier Tracker (split files, hard-coded config in HTML) */
 (function(){
   const $ = (id)=>document.getElementById(id);
@@ -54,7 +55,8 @@
   const money = (n)=>'₱'+Number(n||0).toLocaleString(undefined,{maximumFractionDigits:2});
 
   // ===== UI State (display-only) =====
-  let shippingHidden = true; // hide shipping numbers by default
+  // Shipping is shown as numbers, but we label it as "2FLY" in the UI.
+  let shippingHidden = false; // default: visible
   let toastTimer = null;
 
   function showToast(msg){
@@ -227,7 +229,7 @@ async function ensureSession(){
     const total = product + ship;
 
     if (el('kpiProductRev')) el('kpiProductRev').textContent = money(product);
-    if (el('kpiShipRev')) el('kpiShipRev').textContent = shippingHidden ? 'Hidden' : money(ship);
+    if (el('kpiShipRev')) el('kpiShipRev').textContent = money(ship);
     if (el('kpiTotalRev')) el('kpiTotalRev').textContent = money(total);
 
     // Today metrics (based on order_date = YYYY-MM-DD)
@@ -301,7 +303,7 @@ async function ensureSession(){
         <td style="padding:10px;text-align:right;border-bottom:1px solid rgba(35,48,85,.35)">${r.orders}</td>
         <td style="padding:10px;text-align:right;border-bottom:1px solid rgba(35,48,85,.35)">${r.customers}</td>
         <td style="padding:10px;text-align:right;border-bottom:1px solid rgba(35,48,85,.35)">${money(r.prod)}</td>
-        <td style="padding:10px;text-align:right;border-bottom:1px solid rgba(35,48,85,.35)">${shippingHidden ? 'Hidden' : money(r.ship)}</td>
+        <td style="padding:10px;text-align:right;border-bottom:1px solid rgba(35,48,85,.35)">${money(r.ship)}</td>
         <td style="padding:10px;text-align:right;border-bottom:1px solid rgba(35,48,85,.35)">${money(r.total)}</td>
       </tr>
     `).join('');
@@ -582,11 +584,11 @@ if (o.attachment_url){
     // Hide shipping numbers by default (dashboard + sales table). Toggle via button.
     const btnToggleShipping = document.getElementById('btnToggleShipping');
     if (btnToggleShipping){
-      const sync = ()=>{ btnToggleShipping.textContent = shippingHidden ? 'Show Shipping' : 'Hide Shipping'; };
+      const sync = ()=>{ btnToggleShipping.textContent = shippingHidden ? 'Show 2FLY' : 'Hide 2FLY'; };
       sync();
       btnToggleShipping.addEventListener('click', ()=>{
         if (shippingHidden){
-          const ok = confirm('Reveal shipping numbers? This will show shipping collected on screen.');
+          const ok = confirm('Reveal 2FLY numbers? This will show 2FLY collected on screen.');
           if (!ok) return;
           shippingHidden = false;
         } else {
