@@ -186,7 +186,20 @@
                 <option value="jnt">J&T (Courier)</option>
                 <option value="lalamove">Lalamove</option>
                 <option value="walkin">Walk-in</option>
-              </select>
+                <option value="mto">Made to Order</option>
+              
+              <div class="row2" style="margin-top:10px">
+                <div>
+                  <label>Shipment Date</label>
+                  <input id="shipment_date" type="date" />
+                </div>
+                <div id="releaseWrap">
+                  <label>Release Date (Made to Order)</label>
+                  <input id="release_date" type="date" />
+                </div>
+              </div>
+
+</select>
 
               <div class="row2">
                 <div>
@@ -218,6 +231,7 @@
               <button class="tab" data-tab="jnt" type="button">J&T</button>
               <button class="tab" data-tab="lalamove" type="button">Lalamove</button>
               <button class="tab" data-tab="walkin" type="button">Walk-in</button>
+              <button class="tab" data-tab="mto" type="button">Made to Order</button>
             </div>
             <div class="chip" id="countLabel">0 orders</div>
           </div>
