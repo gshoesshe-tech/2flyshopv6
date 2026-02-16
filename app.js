@@ -37,6 +37,8 @@
   const inputShipment = $('shipment_date');
   const inputRelease = $('release_date');
   const releaseWrap = $('releaseWrap');
+  const inputBalance = $('remaining_balance');
+  const balanceWrap = $('balanceWrap');
   const inputPaidProd = $('paid_product');
   const inputPaidShip = $('paid_shipping');
   const inputNotes = $('notes');
@@ -162,6 +164,8 @@ async function ensureSession(){
     const isMTO = inputDelivery.value === 'mto';
     if (releaseWrap) releaseWrap.classList.toggle('hidden', !isMTO);
     if (!isMTO && inputRelease) inputRelease.value = '';
+    if (balanceWrap) balanceWrap.classList.toggle('hidden', !isMTO);
+    if (!isMTO && inputBalance) inputBalance.value = '';
   }
 
   function resetForm(){
@@ -170,6 +174,7 @@ async function ensureSession(){
     form.reset();
     if (inputShipment) inputShipment.value = '';
     if (inputRelease) inputRelease.value = '';
+    if (inputBalance) inputBalance.value = '';
     if (inputStatus) inputStatus.value = 'pending';
     if (inputDelivery) inputDelivery.value = 'jnt';
     handleDeliveryChange();
@@ -381,6 +386,15 @@ async function ensureSession(){
         line.innerHTML = `<span class="label">SHIPMENT DATE :</span><span class="val">${fmtDMY(shipAt)}</span>`;
         dateBlock.appendChild(line);
       }
+
+      const bal = Number(o.remaining_balance || 0);
+      if (isMTO && bal > 0){
+        const line = document.createElement('div');
+        line.className = 'dateLine balance';
+        line.innerHTML = `<span class="label">BALANCE :</span><span class="val">${money(bal)}</span>`;
+        dateBlock.appendChild(line);
+      }
+
       if (dateBlock.childNodes.length){
         left.appendChild(dateBlock);
       }
@@ -579,6 +593,7 @@ if (o.attachment_url){
     inputNotes.value = o.notes || '';
     if (inputShipment) inputShipment.value = o.shipment_date || '';
     if (inputRelease) inputRelease.value = o.release_date || '';
+    if (inputBalance) inputBalance.value = (o.remaining_balance ?? '') === null ? '' : String(o.remaining_balance ?? '');
     handleDeliveryChange();
   }
 
@@ -609,7 +624,8 @@ if (o.attachment_url){
         notes: inputNotes.value.trim() || null,
         delivery_method: inputDelivery.value,
         shipment_date: inputShipment?.value || null,
-        release_date: (inputDelivery.value === 'mto' ? (inputRelease?.value || null) : null)
+        release_date: (inputDelivery.value === 'mto' ? (inputRelease?.value || null) : null),
+        remaining_balance: (inputDelivery.value === 'mto' ? (inputBalance?.value === '' ? null : Number(inputBalance?.value || 0)) : null)
       };
 
       if (payload.delivery_method === 'walkin') payload.paid_shipping = 0;
