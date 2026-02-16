@@ -34,12 +34,12 @@
   const inputStatus = $('status');
   const inputDate = $('order_date');
   const inputDelivery = $('delivery_method');
+  const inputShipment = $('shipment_date');
+  const inputRelease = $('release_date');
+  const releaseWrap = $('releaseWrap');
   const inputPaidProd = $('paid_product');
   const inputPaidShip = $('paid_shipping');
   const inputNotes = $('notes');
-  const inputShipment = $('shipment_date');
-  const inputRelease = $('release_date');
-  const releaseWrap = document.getElementById('releaseWrap');
 
   const search = $('search');
   const statusFilter = $('statusFilter');
@@ -56,14 +56,15 @@
   let activeTab = 'all';
 
   const money = (n)=>'₱'+Number(n||0).toLocaleString(undefined,{maximumFractionDigits:2});
-  const fmtDMY = (iso)=>{
-    const s = String(iso||'').trim();
-    if (!s) return '';
-    // expects YYYY-MM-DD
-    const m = /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/.exec(s);
-    if (!m) return s;
+
+  const fmtDMY = (s)=>{
+    const v = String(s||'').trim();
+    if (!v) return '';
+    const m = v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return v;
     return `${m[3]}-${m[2]}-${m[1]}`;
   };
+
 
   // ===== UI State (display-only) =====
   // Shipping is shown as numbers, but we label it as "2FLY" in the UI.
@@ -149,7 +150,7 @@ async function ensureSession(){
   function handleDeliveryChange(){
     if (!inputDelivery || !inputPaidShip) return;
 
-    // Walk-in = no shipping fee
+    // Walk-in: shipping/2FLY fee forced to 0
     if (inputDelivery.value === 'walkin'){
       inputPaidShip.value = '0';
       inputPaidShip.disabled = true;
@@ -157,8 +158,8 @@ async function ensureSession(){
       inputPaidShip.disabled = false;
     }
 
-    // Made-to-order: show Release Date field; otherwise hide + clear
-    const isMTO = (inputDelivery.value === 'mto');
+    // Release date only for Made to Order
+    const isMTO = inputDelivery.value === 'mto';
     if (releaseWrap) releaseWrap.classList.toggle('hidden', !isMTO);
     if (!isMTO && inputRelease) inputRelease.value = '';
   }
@@ -167,10 +168,10 @@ async function ensureSession(){
     editingId = null;
     if (formTitle) formTitle.textContent = 'New Order';
     form.reset();
-    if (inputStatus) inputStatus.value = 'pending';
-    if (inputDelivery) inputDelivery.value = 'jnt';
     if (inputShipment) inputShipment.value = '';
     if (inputRelease) inputRelease.value = '';
+    if (inputStatus) inputStatus.value = 'pending';
+    if (inputDelivery) inputDelivery.value = 'jnt';
     handleDeliveryChange();
     if (formMsg) formMsg.textContent = '—';
   }
@@ -357,8 +358,32 @@ async function ensureSession(){
 
       title.appendChild(name);
       title.appendChild(pill(String(o.status||'pending').toUpperCase()));
-      title.appendChild(pill('🚚 '+String(o.delivery_method||'jnt').toUpperCase()));
+      title.appendChild(pill('🚚 '+(String(o.delivery_method||'jnt').toLowerCase()==='mto' ? 'MADE TO ORDER' : String(o.delivery_method||'jnt').toUpperCase())));
       if (o.order_id) title.appendChild(pill(o.order_id,'accent'));
+
+      // Dates (bold) — Shipment Date for all methods, Release Date only for MTO
+      const dateBlock = document.createElement('div');
+      dateBlock.className = 'dateBlock';
+
+      const isMTO = String(o.delivery_method||'').toLowerCase() === 'mto';
+      const rel = (o.release_date||'');
+      const shipAt = (o.shipment_date||'');
+
+      if (isMTO && rel){
+        const line = document.createElement('div');
+        line.className = 'dateLine release';
+        line.innerHTML = `<span class="label">RELEASE DATE :</span><span class="val">${fmtDMY(rel)}</span>`;
+        dateBlock.appendChild(line);
+      }
+      if (shipAt){
+        const line = document.createElement('div');
+        line.className = 'dateLine';
+        line.innerHTML = `<span class="label">SHIPMENT DATE :</span><span class="val">${fmtDMY(shipAt)}</span>`;
+        dateBlock.appendChild(line);
+      }
+      if (dateBlock.childNodes.length){
+        left.appendChild(dateBlock);
+      }
 
       const sub = document.createElement('div');
       sub.style.marginTop='6px';
@@ -373,30 +398,7 @@ async function ensureSession(){
       left.appendChild(title);
       left.appendChild(sub);
 
-      // ===== Dates (Shipment + MTO Release) =====
-      const ship = (o.shipment_date || '').trim();
-      const rel = (o.release_date || '').trim();
-      if (ship || (String(o.delivery_method||'')==='mto' && rel)){
-        const dates = document.createElement('div');
-        dates.style.marginTop = '8px';
-        dates.style.fontSize = '12px';
-        dates.style.lineHeight = '1.45';
-
-        if (String(o.delivery_method||'')==='mto' && rel){
-          const r = document.createElement('div');
-          r.style.fontWeight = '900';
-          r.style.letterSpacing = '.2px';
-          r.textContent = `RELEASE DATE : ${fmtDMY(rel)}`;
-          dates.appendChild(r);
-        }
-        if (ship){
-          const s = document.createElement('div');
-          s.style.color = 'var(--muted)';
-          s.textContent = `SHIPMENT DATE : ${fmtDMY(ship)}`;
-          dates.appendChild(s);
-        }
-        left.appendChild(dates);
-      }
+      
 
       // ===== Expandable Order Details =====
       const raw = (o.order_details || '').trim();
@@ -460,27 +462,26 @@ const right = document.createElement('div');
       right.style.flexWrap='wrap';
       right.style.justifyContent='flex-end';
 
-      
-
-      // ===== Quick Status Update (no need to Edit) =====
-      const status = String(o.status||'pending').toLowerCase();
-      const addQuick = (label, next, cls)=>{
-        const b = document.createElement('button');
-        b.className = 'btn small' + (cls ? (' ' + cls) : '');
-        b.type = 'button';
-        b.textContent = label;
-        b.onclick = ()=>quickSetStatus(o, next);
-        right.appendChild(b);
-      };
-
-      if (status === 'pending'){
-        addQuick('Mark as Processing', 'processing', 'primary');
-        addQuick('Mark as Shipped', 'shipped', '');
-      } else if (status === 'processing'){
-        addQuick('Mark as Shipped', 'shipped', 'primary');
-      } else if (status === 'shipped'){
-        addQuick('Mark as Delivered', 'delivered', 'primary');
+      // Quick status update buttons (no need to Edit)
+      const st = String(o.status||'pending').toLowerCase();
+      if (st === 'pending'){
+        const q1 = document.createElement('button');
+        q1.className = 'btn small';
+        q1.type = 'button';
+        q1.textContent = 'Mark as Processing';
+        q1.onclick = ()=>quickUpdateStatus(o, 'processing');
+        right.appendChild(q1);
       }
+      if (st === 'pending' || st === 'processing'){
+        const q2 = document.createElement('button');
+        q2.className = 'btn small';
+        q2.type = 'button';
+        q2.textContent = 'Mark as Shipped';
+        q2.onclick = ()=>quickUpdateStatus(o, 'shipped');
+        right.appendChild(q2);
+      }
+
+      
 
       // Expand / Collapse button (shows full order form)
 
@@ -550,14 +551,13 @@ if (o.attachment_url){
     }
   }
 
-
-  async function quickSetStatus(o, nextStatus){
+  async function quickUpdateStatus(o, newStatus){
     try{
+      if (!o || !o.id) return;
       if (!await ensureSession()) return;
-      const { error } = await supa.from('orders').update({ status: nextStatus }).eq('id', o.id);
+      const { error } = await supa.from('orders').update({ status: newStatus }).eq('id', o.id);
       if (error) throw error;
-      showToast(`Status → ${String(nextStatus).toUpperCase()} ✅`);
-      // Keep sorting stable: reload orders ordered by order_date + id (no "updated_at" sorting)
+      showToast('Updated ✅');
       await loadOrders();
     } catch(e){
       showErr(e?.message || String(e));
@@ -609,11 +609,10 @@ if (o.attachment_url){
         notes: inputNotes.value.trim() || null,
         delivery_method: inputDelivery.value,
         shipment_date: inputShipment?.value || null,
-        release_date: inputRelease?.value || null
+        release_date: (inputDelivery.value === 'mto' ? (inputRelease?.value || null) : null)
       };
 
       if (payload.delivery_method === 'walkin') payload.paid_shipping = 0;
-      if (payload.delivery_method !== 'mto') payload.release_date = null;
 
       const file = inputAttach?.files?.[0] || null;
       if (file){ payload.attachment_url = await uploadAttachment(file); }
