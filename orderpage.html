@@ -202,7 +202,13 @@
       background:rgba(255,190,120,.10);
     }
 
-    /* Form: tighter premium controls */
+    
+    .dateLine.balance .val{
+      border-color:rgba(51,214,159,.40);
+      background:rgba(51,214,159,.10);
+    }
+
+/* Form: tighter premium controls */
     input,select,textarea{
       border-color:rgba(35,48,85,.95);
       background:rgba(7,11,21,.50);
@@ -359,6 +365,11 @@
     <div class="box"><div class="num" id="kpiShipRev">₱0</div><div class="lbl">2FLY</div></div>
     <div class="box"><div class="num" id="kpiTotalRev">₱0</div><div class="lbl">TOTAL COLLECTED</div></div>
   </div>
+              <div id="balanceWrap" class="hidden" style="margin-top:10px">
+                <label>Remaining Balance (₱) — Made to Order</label>
+                <input id="remaining_balance" type="number" step="0.01" placeholder="e.g. 1025" />
+              </div>
+
 
   <!-- KPI ROW 2 -->
   <div class="kpi" style="grid-template-columns:repeat(3,1fr); margin-top:10px">
