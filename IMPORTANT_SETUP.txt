@@ -1,0 +1,20 @@
+
+IMPORTANT SETUP
+
+1. Run supabase_setup.sql in Supabase SQL Editor first.
+2. Upload all files together to GitHub / Netlify:
+   - index.html
+   - orderpage.html
+   - inventory.html
+   - dashboard.html
+   - app.js
+3. Existing old orders will still load.
+4. New features added:
+   - separate Order Type
+   - tracked items
+   - inventory page
+   - dashboard page
+   - activity log
+5. Only tracked items affect inventory.
+6. Free text Order Details stays and does NOT affect inventory.
+7. If an old order had delivery_method = mto, it will still behave as Made to Order.

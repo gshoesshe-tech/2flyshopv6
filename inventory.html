@@ -3,13 +3,12 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Supplier Tracker — Orders</title>
+  <title>Supplier Tracker — Inventory</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
     window.__SUPABASE_URL__ = "https://ngthitqzqtnvmsthwddl.supabase.co";
     window.__SUPABASE_ANON_KEY__ = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ndGhpdHF6cXRudm1zdGh3ZGRsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkzNjQ5NTEsImV4cCI6MjA4NDk0MDk1MX0.MSC3lSHfazA4vpbM69lwzkzxpws7aiGAQk8oVPTZXNw";
     window.__ADMIN_EMAILS__ = ["gshoes@gmail.com","marian@gmail.com","aron@gmail.com"];
-    window.__ATTACHMENTS_BUCKET__ = "order_attachments";
   </script>
   <style>
     :root{--bg:#070b15;--text:#e8ecff;--muted:#9aa6cf;--accent:#7c5cff;--danger:#ff6b6b;--ok:#33d69f;--border:rgba(35,48,85,.92);--radius:16px;--shadow:0 18px 60px rgba(0,0,0,.55)}
@@ -76,189 +75,76 @@
 </style>
   <script defer src="./app.js"></script>
 </head>
-<body data-page="orders">
+<body data-page="inventory">
   <header>
     <div class="wrap topbar">
       <div class="brand">
-        <div class="badge">📦</div>
-        <div>
-          <h1>Supplier Tracker — Orders</h1>
-          <p>Original order flow kept, with tracked items + order type added.</p>
-        </div>
+        <div class="badge">📚</div>
+        <div><h1>Inventory</h1><p>Track on-hand, production, reserved, and available stock.</p></div>
       </div>
       <div class="actions">
-        <a class="btn" href="./inventory.html">Inventory</a>
+        <a class="btn" href="./orderpage.html">Orders</a>
         <a class="btn" href="./dashboard.html">Dashboard</a>
         <div id="userChip" class="chip">Checking session…</div>
         <button id="btnLogout" class="btn danger" type="button">Logout</button>
       </div>
     </div>
   </header>
-
   <main class="wrap">
     <div id="authError" class="notice hidden" role="alert"></div>
-
-    <div class="gridMain">
+    <div class="kpi" style="padding-top:16px">
+      <div class="box"><div id="kpiInvVariants" class="num">0</div><div class="lbl">TOTAL VARIANTS</div></div>
+      <div class="box"><div id="kpiInvOnHand" class="num">0</div><div class="lbl">ON-HAND</div></div>
+      <div class="box"><div id="kpiInvProduction" class="num">0</div><div class="lbl">PRODUCTION</div></div>
+      <div class="box"><div id="kpiInvAvailable" class="num">0</div><div class="lbl">AVAILABLE</div></div>
+    </div>
+    <div class="inventoryGrid">
       <section class="card">
-        <div class="hd">
-          <h2 id="formTitle">New Order</h2>
-          <div class="chip">Free text stays. Tracked items affect stock.</div>
-        </div>
+        <div class="hd"><h2 id="inventoryFormTitle">Add / Update Inventory</h2><div class="chip">One row per product + variant + size</div></div>
         <div class="bd">
-          <form id="orderForm">
-            <label>Customer Name</label>
-            <input id="customer_name" required placeholder="e.g. Juan Dela Cruz" />
-
-            <label>Facebook Profile</label>
-            <input id="fb_profile" placeholder="facebook.com/profile..." />
-
-            <label>Order Details (free text)</label>
-            <textarea id="order_details" required placeholder="Item Code, Size, Quantity, special requests..."></textarea>
-
-            <label>Tracked Items (inventory-linked)</label>
-            <div id="trackedItemsWrap"></div>
-            <button id="btnAddTrackedItem" class="btn small" type="button">+ Add Tracked Item</button>
-            <div class="mini" style="margin-top:6px">Only tracked items deduct stock or production. Free text above is saved only.</div>
-
-            <label>Attachment</label>
-            <input id="attachment" type="file" accept="image/*" />
-
+          <form id="inventoryForm">
+            <input type="hidden" id="inventory_id" />
             <div class="row2">
-              <div>
-                <label>Status</label>
-                <select id="status">
-                  <option value="pending">Pending</option>
-                  <option value="processing">Processing</option>
-                  <option value="shipped">Shipped</option>
-                  <option value="delivered">Delivered</option>
-                  <option value="cancelled">Cancelled</option>
-                </select>
-              </div>
-              <div>
-                <label>Order Date</label>
-                <input id="order_date" type="date" />
-              </div>
+              <div><label>Category</label><input id="inv_category" required placeholder="Boxers, Tank Tops, Caps..." /></div>
+              <div><label>Product Name</label><input id="inv_product_name" required placeholder="Designer Boxers" /></div>
             </div>
-
             <div class="row2">
-              <div>
-                <label>Delivery Method</label>
-                <select id="delivery_method">
-                  <option value="jnt">J&T</option>
-                  <option value="lalamove">Lalamove</option>
-                  <option value="walkin">Walk-in</option>
-                </select>
-              </div>
-              <div>
-                <label>Order Type</label>
-                <select id="order_type">
-                  <option value="onhand">On-hand</option>
-                  <option value="mto">Made to Order</option>
-                </select>
-              </div>
+              <div><label>Variant / Color</label><input id="inv_variant" required placeholder="Black / Red Garter" /></div>
+              <div><label>Size</label><input id="inv_size" required placeholder="M / XL / 7 1/4" /></div>
             </div>
-
             <div class="row2">
-              <div>
-                <label>Shipment Date</label>
-                <input id="shipment_date" type="date" />
-              </div>
-              <div id="releaseWrap" class="hidden">
-                <label>Release Date</label>
-                <input id="release_date" type="date" />
-              </div>
+              <div><label>SKU / Code</label><input id="inv_sku" placeholder="Optional" /></div>
+              <div><label>Low Stock Alert</label><input id="inv_low_stock_alert" type="number" value="10" min="0" /></div>
             </div>
-
-            <div class="row2">
-              <div>
-                <label>Paid Product</label>
-                <input id="paid_product" type="number" step="0.01" placeholder="e.g. 1680" />
-              </div>
-              <div>
-                <label>Paid Shipping / 2FLY</label>
-                <input id="paid_shipping" type="number" step="0.01" placeholder="e.g. 190" />
-              </div>
+            <div class="row3">
+              <div><label>On-hand Qty</label><input id="inv_on_hand_qty" type="number" value="0" min="0" /></div>
+              <div><label>Production Qty</label><input id="inv_production_qty" type="number" value="0" min="0" /></div>
+              <div><label>Reserved Qty</label><input id="inv_reserved_qty" type="number" value="0" min="0" /></div>
             </div>
-
-            <div id="balanceWrap" class="hidden">
-              <label>Remaining Balance</label>
-              <input id="remaining_balance" type="number" step="0.01" placeholder="e.g. 1025" />
-            </div>
-
             <label>Notes</label>
-            <textarea id="notes" placeholder="Supplier notes, tracking #, etc."></textarea>
-
+            <textarea id="inv_notes" placeholder="Optional notes"></textarea>
+            <div class="info">On-hand orders deduct from On-hand Qty. Made to Order orders deduct from Production Qty. Available stock = On-hand - Reserved.</div>
             <div class="formActions">
-              <button id="btnSave" class="btn primary" type="submit">Save Order</button>
-              <button id="btnClear" class="btn" type="button">Clear Form</button>
-              <span id="formMsg" class="chip" style="border-style:dashed">—</span>
+              <button class="btn primary" type="submit">Save Inventory</button>
+              <button id="btnInvClear" class="btn" type="button">Clear</button>
+              <span id="invFormMsg" class="chip" style="border-style:dashed">—</span>
             </div>
           </form>
         </div>
       </section>
-
       <section class="card">
-        <div class="hd" style="display:block">
-          <div class="tabs" id="tabs">
-            <button class="tab active" data-tab="all" type="button">All</button>
-            <button class="tab" data-tab="jnt" type="button">J&T</button>
-            <button class="tab" data-tab="lalamove" type="button">Lalamove</button>
-            <button class="tab" data-tab="walkin" type="button">Walk-in</button>
-            <button class="tab" data-tab="onhand" type="button">On-hand</button>
-            <button class="tab" data-tab="mto" type="button">Made to Order</button>
-          </div>
-          <div class="filters">
-            <input id="search" class="search" placeholder="Search name, details, or ID…" />
-            <select id="statusFilter">
-              <option value="all">All Status</option>
-              <option value="pending">Pending</option>
-              <option value="processing">Processing</option>
-              <option value="shipped">Shipped</option>
-              <option value="delivered">Delivered</option>
-              <option value="cancelled">Cancelled</option>
-            </select>
-            <select id="dateFilter"><option value="all">All Dates</option></select>
-            <button id="btnRefresh" class="btn" type="button">↻</button>
-            <div class="chip" id="countLabel">0 orders</div>
-          </div>
-
-          <div id="adminOnlyDashboard" class="hidden" style="margin-top:12px">
-            <div class="actions" style="justify-content:flex-end;margin-bottom:10px">
-              <button id="btnToggleShipping" class="btn" type="button">Show 2FLY</button>
-            </div>
-            <div class="kpi">
-              <div class="box"><div class="num" id="kpiTotal">0</div><div class="lbl">TOTAL ORDERS</div></div>
-              <div class="box"><div class="num" id="kpiProductRev">₱0</div><div class="lbl">PRODUCT REVENUE</div></div>
-              <div class="box"><div class="num" id="kpiShipRev">₱0</div><div class="lbl">2FLY</div></div>
-              <div class="box"><div class="num" id="kpiTotalRev">₱0</div><div class="lbl">TOTAL COLLECTED</div></div>
-            </div>
-            <div class="kpi small3" style="margin-top:10px">
-              <div class="box"><div class="num" id="kpiOrdersToday">0</div><div class="lbl">ORDERS TODAY</div></div>
-              <div class="box"><div class="num" id="kpiCustomersToday">0</div><div class="lbl">CUSTOMERS TODAY</div></div>
-              <div class="box"><div class="num" id="kpiRevenueToday">₱0</div><div class="lbl">REVENUE TODAY</div></div>
-            </div>
-            <div style="margin-top:12px" class="panel">
-              <div class="hd"><h2>Sales by Day</h2><div class="chip">Last <span id="daysLabel">7</span> days</div></div>
-              <div class="bd">
-                <select id="daysSelect" class="btn" style="padding:9px 12px; width:auto; margin-bottom:8px">
-                  <option value="7">Last 7 days</option>
-                  <option value="14">Last 14 days</option>
-                  <option value="30">Last 30 days</option>
-                </select>
-                <div class="tableWrap">
-                  <table>
-                    <thead>
-                      <tr><th>Date</th><th>Orders</th><th>Customers</th><th>Product</th><th>2FLY</th><th>Total</th></tr>
-                    </thead>
-                    <tbody id="salesTableBody"></tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <div class="hd"><h2>Inventory List</h2><div class="chip" id="inventoryCountLabel">0 rows</div></div>
         <div class="bd">
-          <ul id="orderList" class="list"></ul>
+          <div class="filters">
+            <input id="inv_search" class="search" placeholder="Search product, variant, size, SKU…" />
+            <button id="btnInvRefresh" class="btn" type="button">↻</button>
+          </div>
+          <div class="tableWrap" style="margin-top:10px">
+            <table>
+              <thead><tr><th>Product</th><th>Variant / Size</th><th>On-hand</th><th>Production</th><th>Reserved</th><th>Available</th><th>Actions</th></tr></thead>
+              <tbody id="inventoryTableBody"></tbody>
+            </table>
+          </div>
         </div>
       </section>
     </div>
