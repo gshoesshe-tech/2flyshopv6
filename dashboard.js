@@ -169,11 +169,40 @@
     `).join('') : '<tr><td colspan="6">No orders found for this filter.</td></tr>';
   }
 
+
+  async function fetchAllOrders(){
+    const pageSize = 1000;
+    let from = 0;
+    let all = [];
+
+    while (true){
+      const { data, error } = await supa
+        .from('orders')
+        .select('*')
+        .order('order_date', { ascending:false })
+        .order('id', { ascending:false })
+        .range(from, from + pageSize - 1);
+
+      if (error) throw error;
+
+      const batch = Array.isArray(data) ? data : [];
+      all = all.concat(batch);
+
+      if (batch.length < pageSize) break;
+      from += pageSize;
+    }
+
+    return all;
+  }
+
   async function loadOrders(){
     if (!await ensureSession()) return;
-    const { data, error } = await supa.from('orders').select('*').order('order_date',{ascending:false}).order('id',{ascending:false});
-    if (error){ showErr('Failed to load orders: '+(error.message||error)); return; }
-    orders = Array.isArray(data) ? data : [];
+    try{
+      orders = await fetchAllOrders();
+    } catch(error){
+      showErr('Failed to load orders: '+(error.message||error));
+      return;
+    }
     render();
   }
 
