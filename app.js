@@ -41,6 +41,7 @@
   const balanceWrap = $('balanceWrap');
   const inputPaidProd = $('paid_product');
   const inputPaidShip = $('paid_shipping');
+  const inputProductCost = $('product_cost');
   const inputNotes = $('notes');
 
   const search = $('search');
@@ -86,6 +87,116 @@
     if (toastTimer) clearTimeout(toastTimer);
     toastTimer = setTimeout(()=>{ el.classList.remove('show'); }, 1200);
   }
+
+
+  // ===== Backup / Export Helpers =====
+  const GOOGLE_SHEETS_WEB_APP_URL = String(window.__GOOGLE_SHEETS_WEB_APP_URL__ || '').trim();
+
+  function csvEscape(v){
+    const s = String(v ?? '');
+    return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+
+  function getOrderExportRows(list){
+    return (Array.isArray(list) ? list : []).map(o=>{
+      const paidProduct = Number(o.paid_product || 0);
+      const paidShipping = Number(o.paid_shipping || 0);
+      const productCost = Number(o.product_cost || 0);
+      const cashCollected = paidProduct + paidShipping;
+      const estimatedProfit = cashCollected - productCost;
+      return {
+        order_id: o.order_id || '',
+        customer_name: o.customer_name || '',
+        fb_profile: o.fb_profile || '',
+        order_date: o.order_date || '',
+        status: o.status || '',
+        delivery_method: o.delivery_method || '',
+        shipment_date: o.shipment_date || '',
+        release_date: o.release_date || '',
+        paid_product: paidProduct,
+        paid_shipping: paidShipping,
+        product_cost: productCost,
+        cash_collected: cashCollected,
+        estimated_profit: estimatedProfit,
+        remaining_balance: Number(o.remaining_balance || 0),
+        notes: o.notes || '',
+        order_details: o.order_details || ''
+      };
+    });
+  }
+
+  function downloadTextFile(filename, content, type){
+    const blob = new Blob([content], { type: type || 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function exportOrdersCSV(list, filenamePrefix){
+    const rows = getOrderExportRows(list);
+    const headers = [
+      'order_id','customer_name','fb_profile','order_date','status','delivery_method',
+      'shipment_date','release_date','paid_product','paid_shipping','product_cost',
+      'cash_collected','estimated_profit','remaining_balance','notes','order_details'
+    ];
+    const csv = [
+      headers.join(','),
+      ...rows.map(r=>headers.map(h=>csvEscape(r[h])).join(','))
+    ].join('\n');
+    const stamp = new Date().toISOString().slice(0,10);
+    downloadTextFile(`${filenamePrefix || '2fly_orders'}_${stamp}.csv`, csv, 'text/csv;charset=utf-8');
+    showToast('CSV exported ✅');
+  }
+
+  function exportOrdersJSON(list, filenamePrefix){
+    const rows = getOrderExportRows(list);
+    const stamp = new Date().toISOString().slice(0,10);
+    downloadTextFile(`${filenamePrefix || '2fly_orders'}_${stamp}.json`, JSON.stringify(rows, null, 2), 'application/json;charset=utf-8');
+    showToast('JSON exported ✅');
+  }
+
+  async function syncOrderToGoogleSheet(savedOrder, action){
+    if (!GOOGLE_SHEETS_WEB_APP_URL) return;
+    try{
+      const paidProduct = Number(savedOrder.paid_product || 0);
+      const paidShipping = Number(savedOrder.paid_shipping || 0);
+      const productCost = Number(savedOrder.product_cost || 0);
+      await fetch(GOOGLE_SHEETS_WEB_APP_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          action: action || 'save',
+          id: savedOrder.id || '',
+          order_id: savedOrder.order_id || '',
+          customer_name: savedOrder.customer_name || '',
+          order_date: savedOrder.order_date || '',
+          product_sales: paidProduct,
+          shipping_fee: paidShipping,
+          product_cost: productCost,
+          cash_collected: paidProduct + paidShipping,
+          profit: (paidProduct + paidShipping) - productCost,
+          status: savedOrder.status || '',
+          delivery_method: savedOrder.delivery_method || '',
+          shipment_date: savedOrder.shipment_date || '',
+          release_date: savedOrder.release_date || '',
+          remaining_balance: Number(savedOrder.remaining_balance || 0),
+          notes: savedOrder.notes || '',
+          order_details: savedOrder.order_details || '',
+          updated_at: new Date().toISOString()
+        })
+      });
+    } catch(e){
+      console.warn('Google Sheets backup failed:', e);
+      showToast('Saved, but Sheets backup failed');
+    }
+  }
+
 
   async function copyToClipboard(text){
     const t = String(text||'');
@@ -176,6 +287,7 @@ async function ensureSession(){
     if (inputRelease) inputRelease.value = '';
     if (inputBalance) inputBalance.value = '';
     if (inputStatus) inputStatus.value = 'pending';
+    if (inputProductCost) inputProductCost.value = '';
     if (inputDelivery) inputDelivery.value = 'jnt';
     handleDeliveryChange();
     if (formMsg) formMsg.textContent = '—';
@@ -590,6 +702,7 @@ if (o.attachment_url){
     inputDelivery.value = (o.delivery_method || 'jnt');
     inputPaidProd.value = String(o.paid_product ?? '');
     inputPaidShip.value = String(o.paid_shipping ?? '');
+    if (inputProductCost) inputProductCost.value = String(o.product_cost ?? '');
     inputNotes.value = o.notes || '';
     if (inputShipment) inputShipment.value = o.shipment_date || '';
     if (inputRelease) inputRelease.value = o.release_date || '';
@@ -619,6 +732,7 @@ if (o.attachment_url){
         order_details: inputDetails.value.trim(),
         paid_product: Number(inputPaidProd.value || 0),
         paid_shipping: Number(inputPaidShip.value || 0),
+        product_cost: Number(inputProductCost?.value || 0),
         status: inputStatus.value,
         order_date: inputDate.value || null,
         notes: inputNotes.value.trim() || null,
@@ -633,14 +747,21 @@ if (o.attachment_url){
       const file = inputAttach?.files?.[0] || null;
       if (file){ payload.attachment_url = await uploadAttachment(file); }
 
-      let error;
+      let error, data;
       if (editingId){
-        ({ error } = await supa.from('orders').update(payload).eq('id', editingId));
+        ({ data, error } = await supa.from('orders').update(payload).eq('id', editingId).select('*').single());
       } else {
-        ({ error } = await supa.from('orders').insert(payload));
+        ({ data, error } = await supa.from('orders').insert(payload).select('*').single());
       }
 
-      if (error) throw error;
+      if (error){
+        if (String(error.message||'').includes('product_cost')){
+          throw new Error('Missing database column: product_cost. Run the SQL schema update included with these files, then save again.');
+        }
+        throw error;
+      }
+
+      if (data) await syncOrderToGoogleSheet(data, editingId ? 'update' : 'insert');
 
       if (formMsg) formMsg.textContent = 'Saved ✅';
       await loadOrders();
@@ -665,6 +786,8 @@ if (o.attachment_url){
 
     if (btnLogout) btnLogout.addEventListener('click', logout);
     if (btnRefresh) btnRefresh.addEventListener('click', loadOrders);
+    document.getElementById('btnExportCsvOrders')?.addEventListener('click', ()=>exportOrdersCSV(orders, '2fly_orders_full_backup'));
+    document.getElementById('btnExportJsonOrders')?.addEventListener('click', ()=>exportOrdersJSON(orders, '2fly_orders_full_backup'));
     if (btnClear) btnClear.addEventListener('click', resetForm);
     if (form) form.addEventListener('submit', saveOrder);
 
