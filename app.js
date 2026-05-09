@@ -43,6 +43,12 @@
   const inputPaidShip = $('paid_shipping');
   const inputProductCost = $('product_cost');
   const inputNotes = $('notes');
+  const inputParcelType = $('parcel_type');
+  const inputItemsCount = $('items_count');
+  const inputCourierCost = $('courier_cost');
+  const inputTrackingNumber = $('tracking_number');
+  const inputPackedBy = $('packed_by');
+  const inputReleasedBy = $('released_by');
 
   const search = $('search');
   const statusFilter = $('statusFilter');
@@ -57,6 +63,11 @@
   let orders = [];
   let editingId = null;
   let activeTab = 'all';
+  let currentUserEmail = '';
+  const OWNER_EMAILS = Array.isArray(window.__OWNER_EMAILS__) ? window.__OWNER_EMAILS__.map(x=>String(x).toLowerCase()) : ['gshoeswho@gmail.com'];
+  const STAFF_OPTIONS = ['MYRA','VICTOR','BENZ','MARIAN'];
+  const STATUS_OPTIONS = ['pending','processing','shipped','delivered','cancelled'];
+  const canDeleteOrders = ()=>OWNER_EMAILS.includes(String(currentUserEmail || '').toLowerCase());
 
   const money = (n)=>'₱'+Number(n||0).toLocaleString(undefined,{maximumFractionDigits:2});
 
@@ -119,6 +130,15 @@
         cash_collected: cashCollected,
         estimated_profit: estimatedProfit,
         remaining_balance: Number(o.remaining_balance || 0),
+        encoded_by: o.encoded_by || '',
+        parcel_type: o.parcel_type || '',
+        items_count: Number(o.items_count || 0),
+        courier_cost: Number(o.courier_cost || 0),
+        shipping_profit: Number(o.paid_shipping || 0) - Number(o.courier_cost || 0),
+        tracking_number: o.tracking_number || '',
+        packed_by: o.packed_by || '',
+        released_by: o.released_by || '',
+        high_value: ((Number(o.paid_product || 0) + Number(o.paid_shipping || 0)) >= 1000 ? 'YES' : 'NO'),
         notes: o.notes || '',
         order_details: o.order_details || ''
       };
@@ -142,7 +162,7 @@
     const headers = [
       'order_id','customer_name','fb_profile','order_date','status','delivery_method',
       'shipment_date','release_date','paid_product','paid_shipping','product_cost',
-      'cash_collected','estimated_profit','remaining_balance','notes','order_details'
+      'cash_collected','estimated_profit','remaining_balance','encoded_by','parcel_type','items_count','courier_cost','shipping_profit','tracking_number','packed_by','released_by','high_value','notes','order_details'
     ];
     const csv = [
       headers.join(','),
@@ -188,6 +208,15 @@
           remaining_balance: Number(savedOrder.remaining_balance || 0),
           notes: savedOrder.notes || '',
           order_details: savedOrder.order_details || '',
+          encoded_by: savedOrder.encoded_by || currentUserEmail || '',
+          parcel_type: savedOrder.parcel_type || '',
+          items_count: Number(savedOrder.items_count || 0),
+          courier_cost: Number(savedOrder.courier_cost || 0),
+          shipping_profit: Number(savedOrder.paid_shipping || 0) - Number(savedOrder.courier_cost || 0),
+          tracking_number: savedOrder.tracking_number || '',
+          packed_by: savedOrder.packed_by || '',
+          released_by: savedOrder.released_by || '',
+          high_value: ((paidProduct + paidShipping) >= 1000 ? 'YES' : 'NO'),
           updated_at: new Date().toISOString()
         })
       });
@@ -246,6 +275,7 @@ async function ensureSession(){
     if (!session){ location.replace('./index.html'); return null; }
 
     const email = session.user?.email || 'Logged in';
+    currentUserEmail = session.user?.email || '';
     if (userChip) userChip.textContent = email;
 
     const allow = Array.isArray(window.__ADMIN_EMAILS__) ? window.__ADMIN_EMAILS__ : [];
@@ -286,6 +316,12 @@ async function ensureSession(){
     if (inputShipment) inputShipment.value = '';
     if (inputRelease) inputRelease.value = '';
     if (inputBalance) inputBalance.value = '';
+    if (inputParcelType) inputParcelType.value = '';
+    if (inputItemsCount) inputItemsCount.value = '';
+    if (inputCourierCost) inputCourierCost.value = '';
+    if (inputTrackingNumber) inputTrackingNumber.value = '';
+    if (inputPackedBy) inputPackedBy.value = '';
+    if (inputReleasedBy) inputReleasedBy.value = '';
     if (inputStatus) inputStatus.value = 'pending';
     if (inputProductCost) inputProductCost.value = '';
     if (inputDelivery) inputDelivery.value = 'jnt';
@@ -497,6 +533,8 @@ async function ensureSession(){
       title.appendChild(pill(String(o.status||'pending').toUpperCase()));
       title.appendChild(pill('🚚 '+(String(o.delivery_method||'jnt').toLowerCase()==='mto' ? 'MADE TO ORDER' : String(o.delivery_method||'jnt').toUpperCase())));
       if (o.order_id) title.appendChild(pill(o.order_id,'accent'));
+      if (o.parcel_type) title.appendChild(pill('📦 '+String(o.parcel_type)));
+      if (o.tracking_number) title.appendChild(pill('TN: '+String(o.tracking_number)));
 
       // Dates (bold) — Shipment Date for all methods, Release Date only for MTO
       const dateBlock = document.createElement('div');
@@ -608,26 +646,75 @@ const right = document.createElement('div');
       right.style.flexWrap='wrap';
       right.style.justifyContent='flex-end';
 
-      // Quick status update buttons (no need to Edit)
+      // Quick action panels (no need to Edit)
       const st = String(o.status||'pending').toLowerCase();
-      if (st === 'pending'){
-        const q1 = document.createElement('button');
-        q1.className = 'btn small';
-        q1.type = 'button';
-        q1.textContent = 'Mark as Processing';
-        q1.onclick = ()=>quickUpdateStatus(o, 'processing');
-        right.appendChild(q1);
-      }
-      if (st === 'pending' || st === 'processing'){
-        const q2 = document.createElement('button');
-        q2.className = 'btn small';
-        q2.type = 'button';
-        q2.textContent = 'Mark as Shipped';
-        q2.onclick = ()=>quickUpdateStatus(o, 'shipped');
-        right.appendChild(q2);
-      }
 
-      
+      const quickPanel = document.createElement('div');
+      quickPanel.className = 'quick-group';
+
+      const statusTitle = document.createElement('div');
+      statusTitle.className = 'quick-title';
+      statusTitle.innerHTML = '<span>Status</span><span>Current: '+String(o.status||'pending').toUpperCase()+'</span>';
+      quickPanel.appendChild(statusTitle);
+
+      const statusRow = document.createElement('div');
+      statusRow.className = 'quick-row';
+      STATUS_OPTIONS.forEach(s=>{
+        const b=document.createElement('button');
+        b.className = 'btn small' + (st===s ? ' activeQuick' : '');
+        b.type='button';
+        b.textContent = s.charAt(0).toUpperCase()+s.slice(1);
+        b.onclick = ()=>quickUpdateStatus(o, s);
+        statusRow.appendChild(b);
+      });
+      quickPanel.appendChild(statusRow);
+
+      const packedTitle = document.createElement('div');
+      packedTitle.className = 'quick-title';
+      packedTitle.style.marginTop = '10px';
+      packedTitle.innerHTML = '<span>Packed By</span><span>Current: '+(o.packed_by || '—')+'</span>';
+      quickPanel.appendChild(packedTitle);
+
+      const packedRow = document.createElement('div');
+      packedRow.className = 'quick-row';
+      STAFF_OPTIONS.forEach(name=>{
+        const b=document.createElement('button');
+        b.className = 'btn small' + (String(o.packed_by||'').toUpperCase()===name ? ' activeQuick' : '');
+        b.type='button';
+        b.textContent = name;
+        b.onclick = ()=>quickUpdateField(o, { packed_by: name });
+        packedRow.appendChild(b);
+      });
+      quickPanel.appendChild(packedRow);
+
+      const releasedTitle = document.createElement('div');
+      releasedTitle.className = 'quick-title';
+      releasedTitle.style.marginTop = '10px';
+      releasedTitle.innerHTML = '<span>Released By</span><span>Current: '+(o.released_by || '—')+'</span>';
+      quickPanel.appendChild(releasedTitle);
+
+      const releasedRow = document.createElement('div');
+      releasedRow.className = 'quick-row';
+      STAFF_OPTIONS.forEach(name=>{
+        const b=document.createElement('button');
+        b.className = 'btn small' + (String(o.released_by||'').toUpperCase()===name ? ' activeQuick' : '');
+        b.type='button';
+        b.textContent = name;
+        b.onclick = ()=>quickUpdateField(o, { released_by: name });
+        releasedRow.appendChild(b);
+      });
+      quickPanel.appendChild(releasedRow);
+
+      const encodedLine = document.createElement('div');
+      encodedLine.style.marginTop='10px';
+      encodedLine.style.color='var(--muted)';
+      encodedLine.style.fontSize='12px';
+      encodedLine.textContent = 'Encoded by: ' + (o.encoded_by || '—');
+      quickPanel.appendChild(encodedLine);
+
+      left.appendChild(quickPanel);
+
+
 
       // Expand / Collapse button (shows full order form)
 
@@ -684,12 +771,14 @@ if (o.attachment_url){
       edit.onclick=()=>startEdit(o);
       right.appendChild(edit);
 
-      const del=document.createElement('button');
-      del.className='btn danger';
-      del.type='button';
-      del.textContent='Delete';
-      del.onclick=()=>deleteOrder(o);
-      right.appendChild(del);
+      if (canDeleteOrders()){
+        const del=document.createElement('button');
+        del.className='btn danger';
+        del.type='button';
+        del.textContent='Delete';
+        del.onclick=()=>deleteOrder(o);
+        right.appendChild(del);
+      }
 
       li.appendChild(left);
       li.appendChild(right);
@@ -698,11 +787,28 @@ if (o.attachment_url){
   }
 
   async function quickUpdateStatus(o, newStatus){
+    return quickUpdateField(o, { status: newStatus });
+  }
+
+  async function quickUpdateField(o, patch){
     try{
       if (!o || !o.id) return;
       if (!await ensureSession()) return;
-      const { error } = await supa.from('orders').update({ status: newStatus }).eq('id', o.id);
+
+      const payload = {
+        ...patch
+      };
+
+      const { data, error } = await supa
+        .from('orders')
+        .update(payload)
+        .eq('id', o.id)
+        .select('*')
+        .single();
+
       if (error) throw error;
+
+      if (data) await syncOrderToGoogleSheet(data, 'quick_update');
       showToast('Updated ✅');
       await loadOrders();
     } catch(e){
@@ -731,6 +837,10 @@ if (o.attachment_url){
   }
 
   async function deleteOrder(o){
+    if (!canDeleteOrders()){
+      alert('Only the owner account can delete orders.');
+      return;
+    }
     if (!confirm(`Delete order ${o.order_id || o.id}?`)) return;
     const { error } = await supa.from('orders').delete().eq('id', o.id);
     if (error){ alert(error.message || 'Delete failed'); return; }
@@ -753,6 +863,13 @@ if (o.attachment_url){
         paid_product: Number(inputPaidProd.value || 0),
         paid_shipping: Number(inputPaidShip.value || 0),
         product_cost: Number(inputProductCost?.value || 0),
+        encoded_by: currentUserEmail || null,
+        parcel_type: inputParcelType?.value || null,
+        items_count: inputItemsCount?.value === '' ? null : Number(inputItemsCount?.value || 0),
+        courier_cost: inputCourierCost?.value === '' ? null : Number(inputCourierCost?.value || 0),
+        tracking_number: inputTrackingNumber?.value.trim() || null,
+        packed_by: inputPackedBy?.value || null,
+        released_by: inputReleasedBy?.value || null,
         status: inputStatus.value,
         order_date: inputDate.value || null,
         notes: inputNotes.value.trim() || null,
