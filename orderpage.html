@@ -15,7 +15,8 @@
     window.__SUPABASE_ANON_KEY__ = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ndGhpdHF6cXRudm1zdGh3ZGRsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkzNjQ5NTEsImV4cCI6MjA4NDk0MDk1MX0.MSC3lSHfazA4vpbM69lwzkzxpws7aiGAQk8oVPTZXNw";
     window.__ADMIN_EMAILS__ = ["gshoes@gmail.com","marian@gmail.com","aron@gmail.com"];
     window.__ATTACHMENTS_BUCKET__ = "order_attachments";
-    window.__GOOGLE_SHEETS_WEB_APP_URL__ = "https://script.google.com/macros/s/AKfycbwk0cgXT9UUVcgcGpCGgoUgSj6TqeqmelU94pIz2JSGDtXRHrl4wxLL_hxqYgtvkUK7/exec"; // Paste your Google Apps Script Web App URL here
+    window.__OWNER_EMAILS__ = ["gshoeswho@gmail.com"]; // Only these emails can delete orders
+    window.__GOOGLE_SHEETS_WEB_APP_URL__ = "https://script.google.com/macros/s/AKfycbwcVglfDq_klJxvV-yJqiKFhWcZ6dD1_zr3u7deaH8QqHT0t3RowAxAl4zNCirkyang/exec"; // Paste your Google Apps Script Web App URL here
   </script>
 
   <script defer src="./app.js"></script>
@@ -45,7 +46,7 @@
     label{display:block;margin:10px 0 6px;color:var(--muted);font-size:12px}
     input,select,textarea{width:100%;padding:10px;border-radius:12px;border:1px solid rgba(35,48,85,.9);background:rgba(7,11,21,.55);color:var(--text);outline:none}
     textarea{min-height:90px;resize:vertical}
-    .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}@media(max-width:720px){.row3{grid-template-columns:1fr}}
     .formActions{display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap}
     .tabs{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
     .tab{padding:7px 10px;border-radius:999px;border:1px solid rgba(35,48,85,.85);background:rgba(11,18,36,.55);color:var(--muted);cursor:pointer;font-size:12px}
@@ -94,6 +95,11 @@
       color:var(--text);
     }
     .btn.small{padding:7px 10px;font-size:12px;border-radius:10px;font-weight:700}
+    .quick-group{margin-top:10px;padding:10px 12px;border-radius:14px;border:1px solid rgba(35,48,85,.45);background:rgba(7,11,21,.22)}
+    .quick-title{font-size:11px;color:var(--muted);font-weight:900;letter-spacing:.3px;text-transform:uppercase;margin-bottom:8px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+    .quick-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    .btn.activeQuick{background:rgba(124,92,255,.28);border-color:rgba(124,92,255,.75);color:#fff}
+    .btn.lockedDelete{display:none}
 
   
     /* ===== Premium UI Add-ons ===== */
@@ -293,6 +299,57 @@
                 <option value="mto">Made to Order</option>
               </select>
 
+
+
+              <div class="row3">
+                <div>
+                  <label>Parcel Type</label>
+                  <select id="parcel_type">
+                    <option value="">Select parcel type</option>
+                    <option value="Boxers">Boxers</option>
+                    <option value="Caps">Caps</option>
+                    <option value="Earrings">Earrings</option>
+                    <option value="Tank Tops">Tank Tops</option>
+                    <option value="Mixed">Mixed</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label># of Items</label>
+                  <input id="items_count" type="number" min="0" step="1" placeholder="e.g. 30" />
+                </div>
+                <div>
+                  <label>Courier Cost (₱)</label>
+                  <input id="courier_cost" type="number" min="0" step="0.01" placeholder="e.g. 54" />
+                </div>
+              </div>
+
+              <div class="row3">
+                <div>
+                  <label>Tracking Number</label>
+                  <input id="tracking_number" placeholder="e.g. JT001..." />
+                </div>
+                <div>
+                  <label>Packed By</label>
+                  <select id="packed_by">
+                    <option value="">Select staff</option>
+                    <option value="MYRA">MYRA</option>
+                    <option value="VICTOR">VICTOR</option>
+                    <option value="BENZ">BENZ</option>
+                    <option value="MARIAN">MARIAN</option>
+                  </select>
+                </div>
+                <div>
+                  <label>Released By</label>
+                  <select id="released_by">
+                    <option value="">Select staff</option>
+                    <option value="MYRA">MYRA</option>
+                    <option value="VICTOR">VICTOR</option>
+                    <option value="BENZ">BENZ</option>
+                    <option value="MARIAN">MARIAN</option>
+                  </select>
+                </div>
+              </div>
 
               <div class="row2" style="margin-top:10px">
                 <div>
