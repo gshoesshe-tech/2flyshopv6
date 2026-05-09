@@ -50,6 +50,15 @@
         cash_collected: cash,
         estimated_profit: cash - productCost,
         remaining_balance: Number(o.remaining_balance || 0),
+        encoded_by: o.encoded_by || '',
+        parcel_type: o.parcel_type || '',
+        items_count: Number(o.items_count || 0),
+        courier_cost: Number(o.courier_cost || 0),
+        shipping_profit: Number(o.paid_shipping || 0) - Number(o.courier_cost || 0),
+        tracking_number: o.tracking_number || '',
+        packed_by: o.packed_by || '',
+        released_by: o.released_by || '',
+        high_value: ((Number(o.paid_product || 0) + Number(o.paid_shipping || 0)) >= 1000 ? 'YES' : 'NO'),
         notes: o.notes || '',
         order_details: o.order_details || ''
       };
@@ -57,7 +66,7 @@
   }
   function exportCSV(list, prefix){
     const rows = exportRows(list);
-    const headers = ['order_id','customer_name','fb_profile','order_date','status','delivery_method','shipment_date','release_date','paid_product','paid_shipping','product_cost','cash_collected','estimated_profit','remaining_balance','notes','order_details'];
+    const headers = ['order_id','customer_name','fb_profile','order_date','status','delivery_method','shipment_date','release_date','paid_product','paid_shipping','product_cost','cash_collected','estimated_profit','remaining_balance','encoded_by','parcel_type','items_count','courier_cost','shipping_profit','tracking_number','packed_by','released_by','high_value','notes','order_details'];
     const csv = [headers.join(','), ...rows.map(r=>headers.map(h=>csvEscape(r[h])).join(','))].join('\n');
     const stamp = new Date().toISOString().slice(0,10);
     downloadTextFile(`${prefix}_${stamp}.csv`, csv, 'text/csv;charset=utf-8');
